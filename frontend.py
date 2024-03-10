@@ -4,28 +4,37 @@ import time
 
 st.title("Code Generator")
 
-# To create streaming effect
-
 
 def streaming_effect(message):
+    """
+    Render characters sequentially in the user interface.
+    """
     for word in message.split():
         yield word + " "
         time.sleep(0.05)
 
 
-# Streamed response emulator
-def response_generator(user_input):
-    with httpx.Client() as client:
-        response = client.post(
-            "http://127.0.0.1:8000/generate_code",
-            json={"description": user_input},  # noqa
-        )
+def response_generator(user_input, mode=False):
+    """
+    Sends HTTP request to FastAPI backend and retrieves message from LLM.
+    """
+    if mode:
+        with httpx.Client() as client:
+            response = client.post(
+                "http://127.0.0.1:8000/improve_code",
+                json={"user_input": user_input},  # noqa
+            )
+    else:
+        with httpx.Client() as client:
+            response = client.post(
+                "http://127.0.0.1:8000/generate_code",
+                json={"user_input": user_input},  # noqa
+            )
 
     if response.status_code == 200:
-        generated_code = response.json()["code"]
-        generated_message = response.json()["message"]
+        output = response.json()["code"]
 
-        return generated_code, generated_message
+        return output
 
 
 if "messages" not in st.session_state:
@@ -45,9 +54,12 @@ if prompt := st.chat_input("Input coding problem description"):
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
 
+    # Display assistant response in message container
     with st.chat_message("assistant"):
-        code, message = response_generator(prompt)
+        output = response_generator(
+            prompt, mode=len(st.session_state.messages) >= 2
+        )  # noqa: E501
         st.write_stream(streaming_effect(message))
-        st.code(code, language="python")
+        st.code(output, language="python")
 
-    st.session_state.messages.append({"role": "assistant", "content": code})
+    st.session_state.messages.append({"role": "assistant", "content": output})
